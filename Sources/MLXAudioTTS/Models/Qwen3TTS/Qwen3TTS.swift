@@ -398,7 +398,8 @@ public final class Qwen3TTSModel: Module, SpeechGenerationModel, @unchecked Send
         var decodedTokens = 0
 
         var trailingIdx = 0
-        var inputEmbeds = inputEmbedsInit
+        // Keep the talker in the checkpoint's dtype: an fp32 input promotes every step to fp32 and halves speed.
+        var inputEmbeds = inputEmbedsInit.asType(ttsPadEmbed.dtype)
         let eosTokenArray = MLXArray([Int32(eosTokenId)]).reshaped(1, 1)
         let codeCache = talker.codePredictor.makeCache()
 
@@ -479,7 +480,7 @@ public final class Qwen3TTSModel: Module, SpeechGenerationModel, @unchecked Send
                 codecEmbed = codecEmbed + talker.codePredictor.codecEmbedding[i](code)
             }
 
-            inputEmbeds = textEmbed + codecEmbed
+            inputEmbeds = (textEmbed + codecEmbed).asType(ttsPadEmbed.dtype)
             eval(inputEmbeds, isEOS)
 
             let tokenId = Int(nextToken[0, 0].item(Int32.self))

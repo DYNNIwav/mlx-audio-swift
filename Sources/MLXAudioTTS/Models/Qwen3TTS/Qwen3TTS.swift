@@ -403,6 +403,13 @@ public final class Qwen3TTSModel: Module, SpeechGenerationModel, @unchecked Send
 
         if onAudioChunk != nil {
             speechTokenizer.decoder.resetStreamingState()
+            // The whole-line decode puts the reference before the line; streamed, the decoder starts
+            // empty and the first syllable can come out up to an octave high. So it hears the end of
+            // the reference first, as chunkedDecode's left context does, and that audio is dropped.
+            if let refCodes {
+                let context = min(25, refCodes.dim(2))
+                eval(speechTokenizer.decoder.streamingStep(refCodes[0..., 0..., (refCodes.dim(2) - context)...]))
+            }
         }
         defer {
             if onAudioChunk != nil {

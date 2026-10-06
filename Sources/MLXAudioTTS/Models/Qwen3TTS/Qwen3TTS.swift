@@ -272,10 +272,8 @@ public final class Qwen3TTSModel: Module, SpeechGenerationModel, @unchecked Send
         }
 
         let audioID = ObjectIdentifier(refAudio)
-        print("Got audio ID: '\(audioID)'")
         if let cached = withInputPreparationCacheLock({ cachedReferenceAudioContext }),
            cached.audioID == audioID {
-            print("Returning cached context")
             return cached
         }
 

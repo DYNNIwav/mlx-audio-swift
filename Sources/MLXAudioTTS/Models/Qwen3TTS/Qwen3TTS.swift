@@ -25,6 +25,21 @@ public final class Qwen3TTSModel: Module, SpeechGenerationModel, @unchecked Send
     private let inputPreparationCacheLock = NSLock()
     private var cachedReferenceAudioContext: ReferenceAudioContext?
 
+    /// Held for each streamed line's whole generation. A cancelled stream ends for its listener at
+    /// once while its line runs on to the next step, so this is what keeps two lines off the GPU
+    /// together and lets an app wait for the last one before it exits.
+    private let generating = NSLock()
+
+    /// Blocks until no streamed line is generating. A cancelled line stops at its next step.
+    public func waitUntilIdle() { generating.withLock {} }
+
+    /// True while a streamed line is generating.
+    public var isGenerating: Bool {
+        guard generating.try() else { return true }
+        generating.unlock()
+        return false
+    }
+
     public var sampleRate: Int { config.sampleRate }
 
     public var defaultGenerationParameters: GenerateParameters {
@@ -684,12 +699,14 @@ public final class Qwen3TTSModel: Module, SpeechGenerationModel, @unchecked Send
             guard let self else { return }
             do {
                 try requireGenerationComponents()
-                try body(
-                    self,
-                    { tokenId in continuation.yield(.token(tokenId)) },
-                    { info in continuation.yield(.info(info)) },
-                    { chunk in continuation.yield(.audio(chunk)) }
-                )
+                try generating.withLock {
+                    try body(
+                        self,
+                        { tokenId in continuation.yield(.token(tokenId)) },
+                        { info in continuation.yield(.info(info)) },
+                        { chunk in continuation.yield(.audio(chunk)) }
+                    )
+                }
                 continuation.finish()
             } catch {
                 continuation.finish(throwing: error)

@@ -408,6 +408,8 @@ public final class Qwen3TTSModel: Module, SpeechGenerationModel, @unchecked Send
         // Streaming decode state
         let codecTokenRateHz = 12.5
         let streamingChunkSize = max(1, Int(streamingInterval * codecTokenRateHz))
+        // The first chunk is at most two frames, so a line starts sounding sooner; the rest keep the full size.
+        let firstChunkSize = min(2, streamingChunkSize)
         var decodedTokens = 0
 
         var trailingIdx = 0
@@ -514,7 +516,7 @@ public final class Qwen3TTSModel: Module, SpeechGenerationModel, @unchecked Send
             // Streaming: decode and yield audio chunks during generation
             if let onAudioChunk {
                 let newTokens = generatedCodes.count - decodedTokens
-                if newTokens >= streamingChunkSize {
+                if newTokens >= (decodedTokens == 0 ? firstChunkSize : streamingChunkSize) {
                     let codesChunk = stacked(Array(generatedCodes[decodedTokens...]), axis: 1)
                     let codesForDecoder = codesChunk.transposed(0, 2, 1)
                     eval(codesForDecoder)
